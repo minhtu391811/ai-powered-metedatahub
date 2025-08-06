@@ -36,7 +36,7 @@ download_and_verify() {
   fi
 
   local md5_command
-  if [[ "$(uname)" == "Darwin" ]]; then
+  if [[ "$(uname)" == "Darwin" ]]; then 
     # macOS
     md5_command="md5 -q"
   elif [[ "$(uname)" == "Linux" ]]; then

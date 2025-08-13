@@ -28,7 +28,7 @@ playgroundRuntimeName="gravitino-playground"
 requiredDiskSpaceGB=25
 requiredRamGB=6
 requiredCpuCores=2
-requiredPorts=(6080 8090 9001 3307 19000 19083 60070 13306 15342 18080 18888 19090 13000)
+requiredPorts=(8090 9001 3307 19000 19083 60070 15342 18080 14040)
 dockerComposeCommand=""
 
 testDocker() {
@@ -171,11 +171,7 @@ pruneLegacyLogs() {
 }
 
 start() {
-  if [ "${enableRanger}" == true ]; then
-    echo "[INFO] Starting the playground with Ranger..."
-  else
-    echo "[INFO] Starting the playground..."
-  fi
+  echo "[INFO] Starting the playground..."
 
   echo "[INFO] The playground requires ${requiredCpuCores} CPU cores, ${requiredRamGB} GB of RAM, and ${requiredDiskSpaceGB} GB of disk storage to operate efficiently."
 
@@ -191,17 +187,22 @@ start() {
   echo "[INFO] Preparing packages..."
   ./init/spark/spark-dependency.sh
   ./init/gravitino/gravitino-dependency.sh
-  ./init/jupyter/jupyter-dependency.sh
 
   logSuffix=$(date +%Y%m%d%H%M%s)
-  if [ "${enableRanger}" == true ]; then
-    ${dockerComposeCommand} -f docker-compose.yaml -f docker-enable-ranger-hive-override.yaml -p ${playgroundRuntimeName} up --detach
-  else
-    ${dockerComposeCommand} -p ${playgroundRuntimeName} up --detach
-  fi
+  ${dockerComposeCommand} -p ${playgroundRuntimeName} up --detach
   ${dockerComposeCommand} -p ${playgroundRuntimeName} logs -f >${playground_dir}/playground-${logSuffix}.log 2>&1 &
   echo "[INFO] Check log details: ${playground_dir}/playground-${logSuffix}.log"
+  sudo chown -R minhtu:minhtu "${playground_dir}/data"
   pruneLegacyLogs
+
+  echo "[INFO] Waiting for Kafka to be ready on port 19092..."
+  while ! nc -z localhost 19092; do
+    sleep 1
+  done
+  echo "[INFO] Kafka is ready! Running init.py..."
+
+  python3 "${playground_dir}/init/kafka/messages.py"
+  echo "[INFO] messages.py completed."
 }
 
 status() {
@@ -222,22 +223,17 @@ stop() {
 }
 
 case "$1" in
-start)
-  if [[ "$2" == "--enable-ranger" ]]; then
-    enableRanger=true
-  else
-    enableRanger=false
-  fi
-  start
-  ;;
-status)
-  status
-  ;;
-stop)
-  stop
-  ;;
-*)
-  echo "Usage: $0 <start|status|stop> [--enable-ranger]"
-  exit 1
-  ;;
+  start)
+    start
+    ;;
+  status)
+    status
+    ;;
+  stop)
+    stop
+    ;;
+  *)
+    echo "Usage: $0 <start|status|stop>"
+    exit 1
+    ;;
 esac

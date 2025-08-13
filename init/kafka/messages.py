@@ -10,7 +10,7 @@ producer = KafkaProducer(
     value_serializer=lambda v: json.dumps(v).encode("utf-8")
 )
 
-TOPIC_NAME = "test-topic"
+TOPIC_NAME = "gravitino"
 
 def generate_fake_data():
     return {

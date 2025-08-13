@@ -4,7 +4,7 @@ echo "Chờ Kafka sẵn sàng..."
 
 sleep 5
 
-TOPICS=("test-topic" "orders" "users")
+TOPICS=("gravitino" "system" "user")
 
 for topic in "${TOPICS[@]}"; do
     echo "Tạo topic: $topic"

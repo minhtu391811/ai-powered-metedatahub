@@ -28,7 +28,7 @@ playgroundRuntimeName="gravitino-playground"
 requiredDiskSpaceGB=25
 requiredRamGB=6
 requiredCpuCores=2
-requiredPorts=(8090 9001 3307 19000 19083 60070 15342 18080 14040)
+requiredPorts=(8090 9001 3307 19000 19083 60070 15342 18080 14040 19092)
 dockerComposeCommand=""
 
 testDocker() {
@@ -172,6 +172,9 @@ pruneLegacyLogs() {
 
 start() {
   echo "[INFO] Starting the playground..."
+
+  pip3 install --upgrade pip
+  pip3 install -r "${playground_dir}/requirements.txt"
 
   echo "[INFO] The playground requires ${requiredCpuCores} CPU cores, ${requiredRamGB} GB of RAM, and ${requiredDiskSpaceGB} GB of disk storage to operate efficiently."
 

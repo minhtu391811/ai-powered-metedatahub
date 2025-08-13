@@ -1,1 +1,1 @@
-export HADOOP_USER_NAME=anonymous
+export HADOOP_USER_NAME=minhtus

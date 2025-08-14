@@ -1,8 +1,9 @@
 set -e
 
-echo "Chờ Kafka sẵn sàng..."
-
-sleep 5
+echo "Chờ Kafka broker sẵn sàng..."
+until kafka-topics.sh --bootstrap-server kafka:9092 --list >/dev/null 2>&1; do
+  sleep 2
+done
 
 TOPICS=("gravitino" "system" "user")
 

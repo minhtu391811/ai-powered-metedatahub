@@ -200,9 +200,9 @@ start() {
 
   echo "[INFO] Waiting for Kafka to be ready on port 19092..."
   while ! nc -z localhost 19092; do
-    sleep 1
+    sleep 5
   done
-  echo "[INFO] Kafka is ready! Running init.py..."
+  echo "[INFO] Kafka is ready! Running messages.py..."
 
   python3 "${playground_dir}/init/kafka/messages.py"
   echo "[INFO] messages.py completed."

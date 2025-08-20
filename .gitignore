@@ -3,6 +3,6 @@
 **/packages
 **/*.log
 data/
-venv/
+.venv/
 .vscode/
 tmp_files/

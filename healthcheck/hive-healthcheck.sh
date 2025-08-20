@@ -17,6 +17,7 @@
 # specific language governing permissions and limitations
 # under the License.
 #
+
 set -ex
 
 # Attempt to connect to Hive using curl

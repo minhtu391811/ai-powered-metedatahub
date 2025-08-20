@@ -19,7 +19,8 @@
 echo "Start to download the jar package of JDBC"
 cp /tmp/gravitino/packages/postgresql-42.2.7.jar /root/gravitino/catalogs/jdbc-postgresql/libs/postgresql-42.2.7.jar
 cp /root/gravitino/catalogs/jdbc-postgresql/libs/postgresql-42.2.7.jar /root/gravitino/catalogs/lakehouse-iceberg/libs
-cp /root/gravitino/catalogs/jdbc-postgresql/libs/postgresql-42.2.7.jar /root/gravitino/catalogs/lakehouse-paimon/libs
+cp /root/gravitino/catalogs/jdbc-postgresql/libs/postgresql-42.2.7.jar /root/gravitino/catalogs/lakehouse-paimon
+cp /tmp/gravitino/packages/gravitino-aws-bundle-0.9.1.jar /root/gravitino/catalogs/hadoop/libs
 
 cp /root/gravitino/catalogs/jdbc-postgresql/libs/postgresql-42.2.7.jar /root/gravitino/iceberg-rest-server/libs
 

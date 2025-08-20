@@ -24,11 +24,11 @@ playground_dir="$(
   pwd
 )"
 
-playgroundRuntimeName="gravitino-playground"
+playgroundRuntimeName="ai-powered-metadatahub"
 requiredDiskSpaceGB=25
 requiredRamGB=6
 requiredCpuCores=2
-requiredPorts=(8090 9001 3307 19000 19083 60070 15342 18080 14040 19092)
+requiredPorts=(8090 9001 3307 19000 19083 60070 15342 18080 14040 19092 9092 8080 9000 19001 6080)
 dockerComposeCommand=""
 
 testDocker() {
@@ -171,7 +171,11 @@ pruneLegacyLogs() {
 }
 
 start() {
-  echo "[INFO] Starting the playground..."
+  if [ "${enableRanger}" == true ]; then
+    echo "[INFO] Starting the playground with Ranger..."
+  else
+    echo "[INFO] Starting the playground..."
+  fi
 
   pip3 install --upgrade pip
   pip3 install -r "${playground_dir}/requirements.txt"
@@ -188,24 +192,30 @@ start() {
 
   cd ${playground_dir}
   echo "[INFO] Preparing packages..."
+  find ${playground_dir} -type f -name "*.sh" -exec chmod +x {}
+
   ./init/spark/spark-dependency.sh
   ./init/gravitino/gravitino-dependency.sh
 
+  KAFKA_DIR="${playground_dir}/data/kafka"
+
+  mkdir -p "$KAFKA_DIR"
+
+  chown -R 1001:1001 "$KAFKA_DIR"
+  chmod -R 775 "$KAFKA_DIR"
+
   logSuffix=$(date +%Y%m%d%H%M%s)
-  ${dockerComposeCommand} -p ${playgroundRuntimeName} up --detach
+  if [ "${enableRanger}" == true ]; then
+    ${dockerComposeCommand} -f docker-compose.yaml -f docker-enable-ranger-hive-override.yaml -p ${playgroundRuntimeName} up --detach
+  else
+    ${dockerComposeCommand} -p ${playgroundRuntimeName} up --detach
+  fi
   ${dockerComposeCommand} -p ${playgroundRuntimeName} logs -f >${playground_dir}/playground-${logSuffix}.log 2>&1 &
   echo "[INFO] Check log details: ${playground_dir}/playground-${logSuffix}.log"
-  sudo chown -R minhtu:minhtu "${playground_dir}/data"
   pruneLegacyLogs
 
-  echo "[INFO] Waiting for Kafka to be ready on port 19092..."
-  while ! nc -z localhost 19092; do
-    sleep 5
-  done
-  echo "[INFO] Kafka is ready! Running messages.py..."
-
-  python3 "${playground_dir}/init/kafka/messages.py"
-  echo "[INFO] messages.py completed."
+  echo "[INFO] Preparing kafka messages..."
+  python3 "${playground_dir}/init/kafka/kafka_producer.py"
 }
 
 status() {
@@ -219,24 +229,29 @@ stop() {
   checkPlaygroundRunning
   echo "[INFO] Stopping the playground..."
 
-  ${dockerComposeCommand} down
+  ${dockerComposeCommand} -p ${playgroundRuntimeName} down
   if [ $? -eq 0 ]; then
     echo "[INFO] Playground stopped!"
   fi
 }
 
 case "$1" in
-  start)
-    start
-    ;;
-  status)
-    status
-    ;;
-  stop)
-    stop
-    ;;
-  *)
-    echo "Usage: $0 <start|status|stop>"
-    exit 1
-    ;;
+start)
+  if [[ "$2" == "--enable-ranger" ]]; then
+    enableRanger=true
+  else
+    enableRanger=false
+  fi
+  start
+  ;;
+status)
+  status
+  ;;
+stop)
+  stop
+  ;;
+*)
+  echo "Usage: $0 <start|status|stop> [--enable-ranger]"
+  exit 1
+  ;;
 esac

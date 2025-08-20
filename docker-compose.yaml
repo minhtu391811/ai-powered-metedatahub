@@ -16,6 +16,7 @@
 # specific language governing permissions and limitations
 # under the License.
 #
+
 services:
   hive:
     image: apache/gravitino-playground:${HIVE_IMAGE_TAG}
@@ -24,12 +25,13 @@ services:
       - "19000:9000"
       - "19083:9083"
       - "60070:50070"
-    container_name: playground-hive
+    container_name: metahub-hive
     environment:
       - HADOOP_USER_NAME=root
     entrypoint: /bin/bash /tmp/hive/init.sh
     volumes:
       - ./init/hive:/tmp/hive
+      - ./data/hive:/root/hive/data
     healthcheck:
       test: ["CMD", "/tmp/check-status.sh"]
       interval: 10s
@@ -37,23 +39,57 @@ services:
       retries: 5
       start_period: 20s
 
+  ranger:
+    image: apache/gravitino-playground:${RANGER_IMAGE_TAG}
+    ports:
+      - "6080:6080"
+    container_name: playground-ranger
+    entrypoint: /bin/bash /tmp/ranger/init.sh
+    volumes:
+      - ./healthcheck:/tmp/healthcheck
+      - ./init/ranger:/tmp/ranger
+    healthcheck:
+      test: ["CMD", "/tmp/healthcheck/ranger-healthcheck.sh"]
+      interval: 5s
+      timeout: 60s
+      retries: 5
+      start_period: 120s
+
+  minio:
+    image: quay.io/minio/minio:${MINIO_IMAGE_TAG}
+    container_name: metahub-minio
+    ports:
+      - "9000:9000"
+      - "19001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - ./data/minio:/data
+      - ./init/minio-bucket:/tmp/minio-bucket
+    entrypoint: /bin/bash /tmp/minio-bucket/init.sh
+
   gravitino:
     image: apache/gravitino:${GRAVITINO_IMAGE_TAG}
     entrypoint: /bin/bash /tmp/gravitino/init.sh
     ports:
       - "8090:8090"
       - "9001:9001"
-    container_name: playground-gravitino
+    container_name: metahub-gravitino
     depends_on:
       hive:
+        condition: service_healthy
+      ranger:
+        condition: service_healthy
+      mysql:
         condition: service_healthy
     volumes:
       - ./healthcheck:/tmp/healthcheck
       - ./init/gravitino:/tmp/gravitino
-      - ./data/gravitino/db:/root/gravitino/data
+      - ./data/gravitino:/root/gravitino/data
     healthcheck:
       test: ["CMD", "/tmp/healthcheck/gravitino-healthcheck.sh"]
-      interval: 5s
+      interval: 10s
       timeout: 60s
       retries: 5
       start_period: 20s
@@ -62,14 +98,14 @@ services:
     image: apache/gravitino-playground:${TRINO_IMAGE_TAG}
     ports:
       - "18080:8080"
-    container_name: playground-trino
+    container_name: metahub-trino
     environment:
       - HADOOP_USER_NAME=root
       - GRAVITINO_HOST_IP=gravitino
       - GRAVITINO_HOST_PORT=8090
       - GRAVITINO_METALAKE_NAME=metalake_demo
       - HIVE_HOST_IP=hive
-      - POSTGRES_HOST_IP=postgresql
+      - POSTGRESQL_HOST_IP=postgresql
     entrypoint: /bin/bash /tmp/trino/init.sh
     volumes:
       - ./init/trino:/tmp/trino
@@ -89,7 +125,7 @@ services:
 
   postgresql:
     image: postgres:${POSTGRESQL_IMAGE_TAG}
-    container_name: playground-postgresql
+    container_name: metahub-postgresql
     restart: always
     environment:
       POSTGRES_USER: postgres
@@ -99,10 +135,38 @@ services:
       - "15432:5432"
     volumes:
       - ./init/postgres:/docker-entrypoint-initdb.d/
+      - ./data/postgresql:/var/lib/postgresql/data
+
+  mysql:
+    image: mysql:${MYSQL_IMAGE_TAG}
+    container_name: metahub-mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=mysql
+      - MYSQL_USER=mysql
+      - MYSQL_PASSWORD=mysql
+      - MYSQL_DATABASE=db
+    ports:
+      - "13306:3306"
+    volumes:
+      - ./init/mysql:/docker-entrypoint-initdb.d/
+      - ./healthcheck:/tmp/healthcheck
+      - ./data/mysql:/var/lib/mysql
+    command: 
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_general_ci
+      --explicit_defaults_for_timestamp=true
+      --lower_case_table_names=1
+    healthcheck:
+      test: ["CMD", "/bin/bash", "/tmp/healthcheck/mysql-healthcheck.sh"]
+      interval: 5s
+      timeout: 60s
+      retries: 5
+      start_period: 20s
 
   kafka:
     image: bitnami/kafka:${KAFKA_IMAGE_TAG}
-    container_name: playground-kafka
+    container_name: metahub-kafka
     ports:
       - "19092:19092"
       - "9092:9092"
@@ -123,26 +187,26 @@ services:
       bash -c "
         /opt/bitnami/scripts/kafka/run.sh &
         pid=$!;
-        echo 'Chờ Kafka khởi động...';
-        until kafka-topics.sh --bootstrap-server kafka:9092 --list >/dev/null 2>&1; do
-          sleep 2
-        done
-        echo 'Kafka sẵn sàng, tạo topic...';
-        kafka-topics.sh --bootstrap-server localhost:9092 --create --if-not-exists --topic gravitino --partitions 1 --replication-factor 1;
+        bash /tmp/kafka/init.sh;
         wait $pid
       "
+    volumes:
+      - ./init/kafka/init.sh:/tmp/kafka/init.sh
+      - ./data/kafka:/bitnami/kafka
 
   spark:
     image: spark:${SPARK_IMAGE_TAG}
-    container_name: playground-spark
+    container_name: metahub-spark
     depends_on:
       gravitino:
+        condition: service_healthy
+      hive:
         condition: service_healthy
     entrypoint: /bin/bash /tmp/spark/init.sh
     environment:
       - HADOOP_USER_NAME=root
       - HIVE_HOST_IP=hive
-      - POSTGRES_HOST_IP=postgresql
+      - MYSQL_HOST_IP=mysql
       - SPARK_CONNECTOR_JAR=${SPARK_CONNECTOR_JAR}
       - GRAVITINO_VERSION=${GRAVITINO_VERSION}
     ports:
@@ -150,3 +214,4 @@ services:
     volumes:
       - ./init/spark:/tmp/spark
       - ./init/common:/tmp/common
+    

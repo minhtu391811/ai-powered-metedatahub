@@ -21,34 +21,41 @@ cp /tmp/spark/spark-defaults.conf /opt/spark/conf
 cp /tmp/spark/spark-env.sh /opt/spark/conf
 
 cp /tmp/spark/packages/iceberg-spark-runtime-3.4_2.12-1.5.2.jar /opt/spark/jars/iceberg-spark-runtime-3.4_2.12-1.5.2.jar
-cp /tmp/spark/packages/iceberg-aws-bundle-1.9.2.jar /opt/spark/jars/iceberg-aws-bundle-1.9.2.jar
+cp /tmp/spark/packages/paimon-spark-3.4-1.2.0.jar /opt/spark/jars/paimon-spark-3.4-1.2.0.jar
+cp /tmp/spark/packages/paimon-core-1.2.0.jar /opt/spark/jars/paimon-core-1.2.0.jar
 cp /tmp/spark/packages/${SPARK_CONNECTOR_JAR} /opt/spark/jars/${SPARK_CONNECTOR_JAR}
 cp /tmp/spark/packages/postgresql-42.2.7.jar /opt/spark/jars/postgresql-42.2.7.jar
 cp /tmp/spark/packages/kyuubi-spark-authz-shaded_2.12-1.9.2.jar /opt/spark/jars/kyuubi-spark-authz-shaded_2.12-1.9.2.jar
+sh /tmp/common/init_admin.sh
+sh /tmp/common/init_manager.sh
 sh /tmp/common/init_metalake_catalog.sh
 
-counter=0
 SPARK_HOME="/opt/spark"
+counter=0
 
-while [ $counter -le 240 ]; do
-  counter=$((counter + 1))
-  
-  # Kiểm tra xem catalog_paimon đã có chưa
-  catalog_ready=$(${SPARK_HOME}/bin/spark-sql -e "SHOW CATALOGS" | grep -w "catalog_paimon" | wc -l)
+while [ $counter -lt 240 ]; do
+    counter=$((counter + 1))
 
-  if [ "$catalog_ready" -eq 0 ]; then
-    echo "Wait for the initialization of catalog_paimon..."
-    sleep 5
-  else
-    echo "Catalog Paimon is ready"
-    
-    ${SPARK_HOME}/bin/spark-sql -f /tmp/spark/init.sql
+    ${SPARK_HOME}/bin/spark-sql -e "SHOW CATALOGS" | grep -qw "paimon"
+    paimon_ready=$?
 
-    echo "Paimon init.sql executed"
-    
-    # Giữ container chạy
-    tail -f /dev/null &
-    break
-  fi
+    ${SPARK_HOME}/bin/spark-sql -e "SHOW CATALOGS" | grep -qw "catalog_rest"
+    iceberg_ready=$?
+
+    if [ "$paimon_ready" -eq 1 ] && [ "$iceberg_ready" -eq 1 ]; then
+        echo "All catalogs are ready: paimon, catalog_rest"
+
+        echo "Importing Paimon and Iceberg warehouse data..."
+        ${SPARK_HOME}/bin/spark-sql -f /tmp/spark/init.sql
+        echo "Import finished"
+
+        tail -f /dev/null
+        exit 0
+    else
+        echo "[$counter/$MAX_RETRY] Waiting for Spark catalogs to be ready..."
+        sleep 5
+    fi
 done
+
+echo "Timeout: catalogs were not ready after $((MAX_RETRY*5)) seconds"
 exit 1

@@ -3,6 +3,8 @@
 **/packages
 **/*.log
 data/
+jupyter/.ipynb_checkpoints/
+jupyter/artifacts/
+jupyter/metastore_db/
 .venv/
 .vscode/
-tmp_files/

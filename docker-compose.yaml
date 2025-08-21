@@ -25,25 +25,27 @@ services:
       - "19000:9000"
       - "19083:9083"
       - "60070:50070"
-    container_name: metahub-hive
+    container_name: metadatahub-hive
     environment:
-      - HADOOP_USER_NAME=root
+      - HADOOP_USER_NAME=hive
     entrypoint: /bin/bash /tmp/hive/init.sh
     volumes:
       - ./init/hive:/tmp/hive
-      - ./data/hive:/root/hive/data
+      - ./data/hive:/opt/hive/data
     healthcheck:
       test: ["CMD", "/tmp/check-status.sh"]
       interval: 10s
       timeout: 60s
       retries: 5
       start_period: 20s
+    mem_limit: 2g
+    cpus: 2
 
   ranger:
     image: apache/gravitino-playground:${RANGER_IMAGE_TAG}
     ports:
       - "6080:6080"
-    container_name: playground-ranger
+    container_name: metadatahub-ranger
     entrypoint: /bin/bash /tmp/ranger/init.sh
     volumes:
       - ./healthcheck:/tmp/healthcheck
@@ -55,27 +57,13 @@ services:
       retries: 5
       start_period: 120s
 
-  minio:
-    image: quay.io/minio/minio:${MINIO_IMAGE_TAG}
-    container_name: metahub-minio
-    ports:
-      - "9000:9000"
-      - "19001:9001"
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    volumes:
-      - ./data/minio:/data
-      - ./init/minio-bucket:/tmp/minio-bucket
-    entrypoint: /bin/bash /tmp/minio-bucket/init.sh
-
   gravitino:
     image: apache/gravitino:${GRAVITINO_IMAGE_TAG}
     entrypoint: /bin/bash /tmp/gravitino/init.sh
     ports:
       - "8090:8090"
       - "9001:9001"
-    container_name: metahub-gravitino
+    container_name: metadatahub-gravitino
     depends_on:
       hive:
         condition: service_healthy
@@ -98,7 +86,7 @@ services:
     image: apache/gravitino-playground:${TRINO_IMAGE_TAG}
     ports:
       - "18080:8080"
-    container_name: metahub-trino
+    container_name: metadatahub-trino
     environment:
       - HADOOP_USER_NAME=root
       - GRAVITINO_HOST_IP=gravitino
@@ -122,10 +110,12 @@ services:
       timeout: 60s
       retries: 5
       start_period: 20s
+    mem_limit: 2g
+    cpus: 1
 
   postgresql:
     image: postgres:${POSTGRESQL_IMAGE_TAG}
-    container_name: metahub-postgresql
+    container_name: metadatahub-postgresql
     restart: always
     environment:
       POSTGRES_USER: postgres
@@ -139,7 +129,7 @@ services:
 
   mysql:
     image: mysql:${MYSQL_IMAGE_TAG}
-    container_name: metahub-mysql
+    container_name: metadatahub-mysql
     environment:
       - MYSQL_ROOT_PASSWORD=mysql
       - MYSQL_USER=mysql
@@ -166,7 +156,7 @@ services:
 
   kafka:
     image: bitnami/kafka:${KAFKA_IMAGE_TAG}
-    container_name: metahub-kafka
+    container_name: metadatahub-kafka
     ports:
       - "19092:19092"
       - "9092:9092"
@@ -196,22 +186,44 @@ services:
 
   spark:
     image: spark:${SPARK_IMAGE_TAG}
-    container_name: metahub-spark
+    container_name: metadatahub-spark
     depends_on:
       gravitino:
         condition: service_healthy
-      hive:
-        condition: service_healthy
     entrypoint: /bin/bash /tmp/spark/init.sh
     environment:
-      - HADOOP_USER_NAME=root
+      - HADOOP_USER_NAME=hive
       - HIVE_HOST_IP=hive
       - MYSQL_HOST_IP=mysql
       - SPARK_CONNECTOR_JAR=${SPARK_CONNECTOR_JAR}
       - GRAVITINO_VERSION=${GRAVITINO_VERSION}
     ports:
       - "14040:4040"
+      - "17077:7077"
     volumes:
       - ./init/spark:/tmp/spark
       - ./init/common:/tmp/common
+    mem_limit: 4g
+    cpus: 2
     
+  flink:
+    image: flink:${FLINK_IMAGE_TAG}
+    container_name: metadatahub-flink
+    depends_on:
+      gravitino:
+        condition: service_healthy
+      hive:
+        condition: service_healthy
+    entrypoint: /bin/bash /tmp/flink/init.sh
+    environment:
+      - HADOOP_USER_NAME=hive
+      - HIVE_HOST_IP=hive
+      - MYSQL_HOST_IP=mysql
+      - FLINK_CONNECTOR_JAR=${FLINK_CONNECTOR_JAR}
+      - GRAVITINO_VERSION=${GRAVITINO_VERSION}
+    ports:
+      - "18081:8081"
+    volumes:
+      - ./init/flink:/tmp/flink
+    mem_limit: 3g
+    cpus: 2

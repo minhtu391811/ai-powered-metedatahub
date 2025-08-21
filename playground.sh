@@ -28,7 +28,7 @@ playgroundRuntimeName="ai-powered-metadatahub"
 requiredDiskSpaceGB=25
 requiredRamGB=6
 requiredCpuCores=2
-requiredPorts=(8090 9001 3307 19000 19083 60070 15342 18080 14040 19092 9092 8080 9000 19001 6080)
+requiredPorts=(8090 9001 3307 19000 19083 60070 15342 18080 14040 19092 9092 8080 9000 19001 6080 18081 17077)
 dockerComposeCommand=""
 
 testDocker() {
@@ -177,8 +177,8 @@ start() {
     echo "[INFO] Starting the playground..."
   fi
 
-  pip3 install --upgrade pip
-  pip3 install -r "${playground_dir}/requirements.txt"
+  python3 -m pip install --upgrade pip
+  python3 -m pip install -r "${playground_dir}/requirements.txt"
 
   echo "[INFO] The playground requires ${requiredCpuCores} CPU cores, ${requiredRamGB} GB of RAM, and ${requiredDiskSpaceGB} GB of disk storage to operate efficiently."
 
@@ -192,17 +192,19 @@ start() {
 
   cd ${playground_dir}
   echo "[INFO] Preparing packages..."
-  find ${playground_dir} -type f -name "*.sh" -exec chmod +x {}
+  find "${playground_dir}" -type f -name "*.sh" -exec chmod +x {} \;
 
   ./init/spark/spark-dependency.sh
   ./init/gravitino/gravitino-dependency.sh
+  ./init/flink/flink-dependency.sh
 
-  KAFKA_DIR="${playground_dir}/data/kafka"
+  DATA_DIR="${playground_dir}/data"
+  sudo mkdir -p "$DATA_DIR"
+  sudo mkdir -p "$DATA_DIR/kafka"
+  sudo mkdir -p "$DATA_DIR/gravitino"
+  sudo mkdir -p "$DATA_DIR/hive"
 
-  mkdir -p "$KAFKA_DIR"
-
-  chown -R 1001:1001 "$KAFKA_DIR"
-  chmod -R 775 "$KAFKA_DIR"
+  sudo chown -R 1001:0 "$DATA_DIR/kafka"
 
   logSuffix=$(date +%Y%m%d%H%M%s)
   if [ "${enableRanger}" == true ]; then
